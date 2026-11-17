@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
 from cryptography.exceptions import InvalidSignature as _InvalidSignature
@@ -120,6 +121,27 @@ def _ignore_attestation(
     attestation_object: AttestationObject, client_data_hash: bytes
 ) -> None:
     """Ignore attestation."""
+
+
+@dataclass(frozen=True)
+class AuthenticationResult:
+    """Result of a successfully verified authentication assertion.
+
+    :ivar credential: The registered credential that produced the assertion.
+    :ivar auth_data: The authenticator data of this assertion. Exposes the
+        signature counter (`auth_data.counter`) and the backup eligibility /
+        backup state flags (`auth_data.is_backup_eligible()` /
+        `auth_data.is_backed_up()`) of this specific assertion, so the caller
+        can track counter regressions and backup state transitions.
+    :ivar user_handle: The user handle returned by the authenticator, or None.
+        The caller is responsible for comparing it against the user account
+        being authenticated (or using it to identify the account, for
+        discoverable credentials).
+    """
+
+    credential: AttestedCredentialData
+    auth_data: AuthenticatorData
+    user_handle: bytes | None
 
 
 class Fido2Server:
@@ -326,17 +348,18 @@ class Fido2Server:
         state,
         credentials: Sequence[AttestedCredentialData],
         response: AuthenticationResponse | Mapping[str, Any],
-    ) -> AttestedCredentialData:
+    ) -> AuthenticationResult:
         """Verify the correctness of the assertion data received from
         the client.
 
         :param state: The state data returned by the corresponding
-            `register_begin`.
+            `authenticate_begin`.
         :param credentials: The list of previously registered credentials.
-        :param credential_id: The credential id from the client response.
-        :param client_data: The client data.
-        :param auth_data: The authenticator data.
-        :param signature: The signature provided by the client."""
+        :param response: The authentication response from the client.
+        :return: An AuthenticationResult holding the matched credential, the
+            authenticator data of this assertion (signature counter and backup
+            flags), and the user handle returned by the authenticator.
+        """
 
         authentication = AuthenticationResponse.from_dict(response)
         credential_id = authentication.raw_id
@@ -372,7 +395,11 @@ class Fido2Server:
                 except _InvalidSignature:
                     raise ValueError("Invalid signature.")
                 logger.info(f"Credential authenticated: {credential_id.hex()}")
-                return cred
+                return AuthenticationResult(
+                    credential=cred,
+                    auth_data=auth_data,
+                    user_handle=authentication.response.user_handle,
+                )
         raise ValueError("Unknown credential ID.")
 
     @staticmethod

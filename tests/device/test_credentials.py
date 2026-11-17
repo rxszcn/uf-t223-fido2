@@ -27,4 +27,4 @@ def test_make_assert(client, pin_protocol, algorithm):
     # Authenticate the credential
     result = client.get_assertion(request_options.public_key).get_response(0)
     cred_data = server.authenticate_complete(state, credentials, result)
-    assert cred_data == cred
+    assert cred_data.credential == cred

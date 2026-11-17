@@ -108,12 +108,19 @@ def authenticate_complete():
 
     response = request.json
     print("AuthenticationResponse:", response)
-    server.authenticate_complete(
+    result = server.authenticate_complete(
         session.pop("state"),
         credentials,
         response,
     )
     print("ASSERTION OK")
+    print("Signature counter:", result.auth_data.counter)
+    print(
+        "Backup eligible / backed up:",
+        result.auth_data.is_backup_eligible(),
+        result.auth_data.is_backed_up(),
+    )
+    print("User handle:", result.user_handle)
     return jsonify({"status": "OK"})
 
 
